@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">CleanReport</string>
+    <string name="service_description">Este servicio permite monitorear y gestionar procesos activos para optimizar el sistema.</string>
+</resources>
