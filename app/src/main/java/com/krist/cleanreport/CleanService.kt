@@ -7,6 +7,7 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.routing.*
 import io.ktor.server.response.*
+import io.ktor.server.application.* // IMPORTANTE: Agregado para resolver 'call'
 import io.ktor.http.*
 import java.util.*
 
@@ -17,7 +18,6 @@ class CleanService : AccessibilityService() {
     private var activeDefense = false
 
     override fun onServiceConnected() {
-        // Servidor Ktor en puerto 8080
         embeddedServer(Netty, port = 8080) {
             routing {
                 get("/") {
@@ -40,17 +40,17 @@ class CleanService : AccessibilityService() {
                             </div>
                         </body></html>
                     """.trimIndent()
-                    call.respondText(html, ContentType.Text.Html)
+                    context.respondText(html, ContentType.Text.Html) // Cambiado 'call' por 'context' para mayor seguridad
                 }
                 get("/set") {
-                    targetBlock = call.parameters["pkg"]
+                    targetBlock = context.parameters["pkg"]
                     activeDefense = true
-                    call.respondRedirect("/")
+                    context.respondRedirect("/")
                 }
                 get("/stop") {
                     activeDefense = false
                     targetBlock = null
-                    call.respondRedirect("/")
+                    context.respondRedirect("/")
                 }
             }
         }.start(wait = false)
@@ -59,12 +59,10 @@ class CleanService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkgName = event.packageName?.toString() ?: return
         
-        // Registrar para el log remoto
         val time = java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         if (activityLogs.size > 100) activityLogs.removeAt(0)
         activityLogs.add("[$time] $pkgName")
 
-        // DEFENSA AGRESIVA: Si el paquete coincide, lo mandamos al Home inmediatamente
         if (activeDefense && pkgName == targetBlock) {
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
