@@ -1,4 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CleanReport</string>
-    <string name="service_description">Este servicio permite monitorear y gestionar procesos activos para optimizar el sistema.</string>
+    <string name="service_desc">Servicio de Monitoreo y Defensa CleanReport</string>
 </resources>
