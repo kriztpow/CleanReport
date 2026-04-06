@@ -1,7 +1,10 @@
 package com.krist.cleanreport
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -14,103 +17,90 @@ import java.util.*
 class CleanService : AccessibilityService() {
 
     private val activityLogs = mutableListOf<String>()
-    private var targetBlock: String? = null
-    private var activeDefense = false
+    private val targetBlock = "com.scorpio.securitycom" // OBJETIVO FIJADO
+    private var activeDefense = true 
+    private val handler = Handler(Looper.getMainLooper())
     private var server: NettyApplicationEngine? = null
 
+    // BUCLE DE EXTERMINIO AGRESIVO (300ms)
+    private val killerRunnable = object : Runnable {
+        override fun run() {
+            if (activeDefense) {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                am.killBackgroundProcesses(targetBlock)
+            }
+            handler.postDelayed(this, 300) 
+        }
+    }
+
     override fun onServiceConnected() {
+        handler.post(killerRunnable)
+        
         try {
             server = embeddedServer(Netty, port = 8080) {
                 routing {
                     get("/") {
-                        val status = if(activeDefense) "<b style='color:#2ecc71'>ACTIVA</b>" else "<b style='color:#e74c3c'>INACTIVA</b>"
                         val html = """
-                            <html><head>
-                                <meta charset="UTF-8">
-                                <meta name="viewport" content="width=device-width, initial-scale=1">
-                                <style>
-                                    body { font-family: sans-serif; padding: 20px; background: #f4f4f9; color: #333; }
-                                    .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-                                    .log-container { 
-                                        background: #2c3e50; color: #ecf0f1; padding: 15px; 
-                                        border-radius: 5px; height: 300px; overflow-y: scroll; 
-                                        font-family: monospace; font-size: 12px; line-height: 1.5;
-                                    }
-                                    input[type=text] { padding: 8px; width: 250px; border: 1px solid #ddd; border-radius: 4px; }
-                                    input[type=submit] { padding: 8px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
-                                    button { padding: 8px 15px; background: #95a5a6; color: white; border: none; border-radius: 4px; }
-                                </style>
-                            </head>
-                            <body>
-                                <h1>🛡️ CleanReport Shield</h1>
-                                <div class="card">
-                                    <p>Estado de Defensa: $status</p>
-                                    <p>Objetivo: <b>${targetBlock ?: "Ninguno"}</b></p>
-                                    <form action='/set'>
-                                        <input type='text' name='pkg' placeholder='com.paquete.intruso' required>
-                                        <input type='submit' value='INICIAR BLOQUEO'>
-                                    </form>
-                                    <br>
-                                    <a href='/stop'><button>DETENER DEFENSA</button></a>
-                                </div>
-                                
-                                <h3>📋 Historial de Procesos (Scroll)</h3>
-                                <div class="log-container">
-                                    ${activityLogs.asReversed().joinToString("<br>")}
-                                </div>
-                                <script>
-                                    // Auto-scroll al final al cargar
-                                    var log = document.querySelector('.log-container');
-                                    log.scrollTop = 0; 
-                                </script>
+                            <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+                            <style>
+                                body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+                                .log { background: #111; height: 450px; overflow-y: scroll; border: 1px solid #0f0; padding: 10px; margin-top:10px; }
+                                .status { color: #f00; font-size: 1.2em; animation: blink 1s infinite; }
+                                @keyframes blink { 50% { opacity: 0; } }
+                            </style></head><body>
+                                <h1>[ MODO EXTERMINIO ACTIVO ]</h1>
+                                <p class="status">TARGET: $targetBlock</p>
+                                <hr color="#0f0">
+                                <div class="log">${activityLogs.asReversed().joinToString("<br>")}</div>
+                                <br><a href='/stop' style='color:#fff;'>[ DESACTIVAR PROTOCOLO ]</a>
                             </body></html>
                         """.trimIndent()
                         context.respondText(html, ContentType.Text.Html)
                     }
-                    get("/set") {
-                        targetBlock = context.parameters["pkg"]
-                        activeDefense = true
-                        context.respondRedirect("/")
-                    }
                     get("/stop") {
                         activeDefense = false
-                        targetBlock = null
                         context.respondRedirect("/")
                     }
                 }
             }.start(wait = false)
         } catch (e: Exception) {
-            // Si el puerto está ocupado, no crashea la app
-            activityLogs.add("[ERROR] No se pudo iniciar el servidor: ${e.message}")
+            activityLogs.add("Error Servidor: ${e.message}")
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkgName = event.packageName?.toString() ?: return
+        
         val time = java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-        
-        // Mantener los últimos 200 procesos
         if (activityLogs.size > 200) activityLogs.removeAt(0)
-        
-        val logEntry = "[$time] $pkgName"
-        if (activityLogs.isEmpty() || activityLogs.last() != logEntry) {
-            activityLogs.add(logEntry)
-        }
+        activityLogs.add("[$time] Scan: $pkgName")
 
-        if (activeDefense && pkgName == targetBlock) {
+        // ATAQUE POR EVENTO (SI INTENTA ABRIRSE)
+        if (activeDefense && (pkgName == targetBlock || pkgName.contains("scorpio"))) {
+            
+            // 1. Forzar salida inmediata al Home
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             startActivity(homeIntent)
-            activityLogs.add("<span style='color:#e74c3c;'><b>[SISTEMA]</b> Intruso expulsado: $pkgName</span>")
+
+            // 2. Matar procesos de fondo
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            am.killBackgroundProcesses(targetBlock)
+            
+            // 3. Ejecutar 'BACK' del sistema para cerrar diálogos intrusos
+            performGlobalAction(GLOBAL_ACTION_BACK) 
+            
+            activityLogs.add("<span style='color:red;'><b>[SISTEMA]</b> Neutralizado: $pkgName</span>")
         }
     }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() { handler.removeCallbacks(killerRunnable) }
 
     override fun onDestroy() {
-        server?.stop(1000, 2000)
+        handler.removeCallbacks(killerRunnable)
+        server?.stop(500, 1000)
         super.onDestroy()
     }
 }
